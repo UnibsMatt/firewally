@@ -1,0 +1,28 @@
+services:
+  hti-firewall:
+    build: ./backend
+    image: hti-firewall:latest
+    container_name: hti-firewall
+    restart: unless-stopped
+    # Host network namespace: the container manipulates the HOST firewall.
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      BIND_HOST: ${BIND_HOST:-0.0.0.0}
+      PORT: ${PORT:-8088}
+      IPTABLES_MODE: ${IPTABLES_MODE:-auto}     # auto | nft | legacy
+      APPLY_ON_START: ${APPLY_ON_START:-true}   # re-apply last confirmed ruleset on start
+      DRY_RUN: ${DRY_RUN:-false}               # true = only generate, never touch iptables
+      PERSIST_FILE: /host/iptables/rules.v4
+    volumes:
+      # Host iptables directory (iptables-persistent / netfilter-persistent layout).
+      # The directory (not the file) is mounted so the file can be replaced atomically.
+      - ${HOST_IPTABLES_DIR:-/etc/iptables}:/host/iptables
+      - hti-data:/data
+
+volumes:
+  hti-data:

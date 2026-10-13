@@ -1,0 +1,9 @@
+# docker-compose.dev.yml
+services:
+  hti-firewall:
+    network_mode: bridge
+    ports:
+      - "8088:8088"
+    environment:
+      DRY_RUN: "false"
+      APPLY_ON_START: "false"

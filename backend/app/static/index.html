@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTI Firewall</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>HTI Firewall</h1>
+  <div id="status" class="status"></div>
+</header>
+
+<div id="pending" class="banner hidden">
+  <span>Changes are live. Confirm within <b id="countdown">0</b>s or they will be rolled back automatically.</span>
+  <span>
+    <button id="btn-confirm" class="primary">Confirm</button>
+    <button id="btn-rollback" class="danger">Roll back now</button>
+  </span>
+</div>
+
+<nav id="tabs">
+  <button data-tab="rules" class="active">Rules</button>
+  <button data-tab="networks">Networks</button>
+  <button data-tab="services">Services</button>
+  <button data-tab="apply">Review &amp; Apply</button>
+  <button data-tab="history">History</button>
+</nav>
+
+<main>
+  <!-- RULES -->
+  <section id="tab-rules">
+    <form id="form-rules" class="card grid" data-entity="rules">
+      <input type="hidden" name="id">
+      <label>Name<input name="name" required maxlength="64" placeholder="web to dmz"></label>
+      <label>Direction
+        <select name="chain">
+          <option value="input">Input: traffic to this host</option>
+          <option value="forward">Forward: routed between LANs / to containers</option>
+        </select>
+      </label>
+      <label>Source<select name="src_network_id" data-type="int" class="net-select"></select></label>
+      <label>Destination<select name="dst_network_id" data-type="int" class="net-select"></select></label>
+      <label>Service<select name="service_id" data-type="int" class="svc-select"></select></label>
+      <label>Action
+        <select name="action">
+          <option>ACCEPT</option><option>DROP</option><option>REJECT</option>
+        </select>
+      </label>
+      <label class="wide">Comment<input name="comment" maxlength="500"></label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
+        <label class="check"><input type="checkbox" name="log"> Log matches</label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary">Save rule</button>
+        <button type="reset">Clear</button>
+      </div>
+    </form>
+    <p class="hint">Rules are evaluated top to bottom; the first match wins. Use the arrows to reorder.</p>
+    <table>
+      <thead><tr><th>#</th><th>Name</th><th>Direction</th><th>Source</th><th>Destination</th><th>Service</th><th>Action</th><th></th></tr></thead>
+      <tbody id="list-rules"></tbody>
+    </table>
+  </section>
+
+  <!-- NETWORKS -->
+  <section id="tab-networks" class="hidden">
+    <form id="form-networks" class="card grid" data-entity="networks">
+      <input type="hidden" name="id">
+      <label>Name<input name="name" required maxlength="64" placeholder="LAN office"></label>
+      <label>CIDR / host<input name="cidr" placeholder="192.168.10.0/24 or 10.0.0.5"></label>
+      <label>Interface<input name="interface" placeholder="eth1, br-lan, docker0"></label>
+      <label>Description<input name="description" maxlength="500"></label>
+      <div class="actions">
+        <button type="submit" class="primary">Save network</button>
+        <button type="reset">Clear</button>
+      </div>
+    </form>
+    <p class="hint">A network is a subnet, a single host, an interface, or a combination. Leave source/destination empty in a rule for "any".</p>
+    <table>
+      <thead><tr><th>Name</th><th>CIDR</th><th>Interface</th><th>Description</th><th></th></tr></thead>
+      <tbody id="list-networks"></tbody>
+    </table>
+  </section>
+
+  <!-- SERVICES -->
+  <section id="tab-services" class="hidden">
+    <form id="form-services" class="card grid" data-entity="services">
+      <input type="hidden" name="id">
+      <label>Name<input name="name" required maxlength="64" placeholder="PostgreSQL"></label>
+      <label>Protocol
+        <select name="protocol">
+          <option>tcp</option><option>udp</option><option>tcp+udp</option><option>icmp</option><option>any</option>
+        </select>
+      </label>
+      <label>Ports<input name="ports" placeholder="5432 or 80,443 or 8000-8010"></label>
+      <label>Description<input name="description" maxlength="500"></label>
+      <div class="actions">
+        <button type="submit" class="primary">Save service</button>
+        <button type="reset">Clear</button>
+      </div>
+    </form>
+    <table>
+      <thead><tr><th>Name</th><th>Protocol</th><th>Ports</th><th>Description</th><th></th></tr></thead>
+      <tbody id="list-services"></tbody>
+    </table>
+  </section>
+
+  <!-- APPLY -->
+  <section id="tab-apply" class="hidden">
+    <h2>Settings</h2>
+    <form id="form-settings" class="card grid">
+      <label>Input default (after all rules)
+        <select name="input_default">
+          <option value="RETURN">RETURN: fall through to host policy</option>
+          <option value="DROP">DROP: deny everything else</option>
+        </select>
+      </label>
+      <label>Forward default (after all rules)
+        <select name="forward_default">
+          <option value="RETURN">RETURN: fall through to host policy</option>
+          <option value="DROP">DROP: deny everything else</option>
+        </select>
+      </label>
+      <label>Confirm timeout (seconds, 0 = none)<input type="number" name="confirm_timeout" data-type="int" min="0" max="600"></label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" name="allow_established"> Allow established / related traffic</label>
+      </div>
+      <div class="actions"><button type="submit">Save settings</button></div>
+    </form>
+
+    <h2>Generated ruleset</h2>
+    <div id="warnings"></div>
+    <pre id="preview"></pre>
+    <div class="actions">
+      <button id="btn-apply" class="primary">Apply to host</button>
+    </div>
+
+    <h2>Live counters <button id="btn-live" class="small">Refresh</button></h2>
+    <pre id="live">Click refresh.</pre>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="tab-history" class="hidden">
+    <table>
+      <thead><tr><th>When (UTC)</th><th>User</th><th>Status</th><th>Message</th><th>Ruleset</th></tr></thead>
+      <tbody id="list-history"></tbody>
+    </table>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
